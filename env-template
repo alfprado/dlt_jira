@@ -1,0 +1,15 @@
+# Jira API Credentials
+JIRA_SUBDOMAIN=pradofernandes
+JIRA_EMAIL=your_email@example.com
+JIRA_API_TOKEN=your_api_token_here
+
+# PostgreSQL Configuration
+POSTGRES_USER=dlt_user
+POSTGRES_PASSWORD=dlt_password
+POSTGRES_DB=jira_dw
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+
+# Grafana Configuration
+GRAFANA_USER=admin
+GRAFANA_PASSWORD=admin
