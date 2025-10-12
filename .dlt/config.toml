@@ -10,6 +10,7 @@ schema_evolution = false
 [destination.postgres]
 create_indexes = true
 staging = false
+use_staging_for_merge = false
 
 [runtime]
 dlthub_telemetry = true

@@ -63,7 +63,10 @@ def jira_search(
         Iterable[DltResource]: Resource function for searching issues.
     """
 
-    @dlt.resource(write_disposition="merge")
+    @dlt.resource(
+        write_disposition="merge",
+        primary_key="id"
+    )
     def issues(jql_queries: List[str]) -> Iterable[TDataItem]:
         api_path = "rest/api/3/search/jql"
 

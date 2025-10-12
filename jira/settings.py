@@ -9,6 +9,10 @@ DEFAULT_ENDPOINTS = {
             "validateQuery": "strict",
             "jql": "updated >= -90d",
         },
+        "params": {
+            "write_disposition": "merge",
+            "primary_key": "id",
+        }
     },
     "users": {
         "api_path": "rest/api/3/users",
