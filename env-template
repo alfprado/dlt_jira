@@ -1,5 +1,5 @@
 # Jira API Credentials
-JIRA_SUBDOMAIN=pradofernandes
+JIRA_SUBDOMAIN=subdomain
 JIRA_EMAIL=your_email@example.com
 JIRA_API_TOKEN=your_api_token_here
 

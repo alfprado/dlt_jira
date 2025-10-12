@@ -1,1 +1,2 @@
 dlt[postgres]>=1.17.1
+dbt-postgres>=1.7.0

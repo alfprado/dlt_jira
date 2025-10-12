@@ -1,0 +1,12 @@
+jira_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
+      port: "{{ env_var('POSTGRES_PORT', 5432) | as_number }}"
+      user: "{{ env_var('POSTGRES_USER', 'dlt_user') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD', 'dlt_password') }}"
+      dbname: "{{ env_var('POSTGRES_DB', 'jira_dw') }}"
+      schema: jira_analytics
+      threads: 4

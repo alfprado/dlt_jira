@@ -9,3 +9,8 @@ secrets.toml
 *.duckdb
 *.wal
 py312/
+# dbt artifacts
+target/
+dbt_packages/
+logs/
+dbt_project.yml.sig

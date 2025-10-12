@@ -1,0 +1,111 @@
+version: 2
+
+models:
+  - name: stg_jira_issues
+    description: "Staging layer for Jira issues data with cleaned and standardized column names"
+    columns:
+      - name: issue_id
+        description: "Unique identifier for the issue"
+        tests:
+          - unique
+          - not_null
+      - name: issue_key
+        description: "Issue key (e.g., PROJ-123)"
+        tests:
+          - unique
+          - not_null
+      - name: summary
+        description: "Issue summary/title"
+      - name: issue_type
+        description: "Issue type (e.g., Bug, Task, Story)"
+      - name: status
+        description: "Current status name"
+      - name: status_category
+        description: "Status category (To Do, In Progress, Done)"
+      - name: priority
+        description: "Priority level"
+      - name: assignee_id
+        description: "Account ID of the assignee"
+      - name: assignee_name
+        description: "Display name of the assignee"
+      - name: reporter_id
+        description: "Account ID of the reporter"
+      - name: reporter_name
+        description: "Display name of the reporter"
+      - name: project_id
+        description: "Project ID"
+      - name: project_name
+        description: "Project name"
+      - name: created_date
+        description: "Creation timestamp"
+        tests:
+          - not_null
+      - name: updated_date
+        description: "Last update timestamp"
+      - name: resolution_date
+        description: "Resolution timestamp"
+      - name: due_date
+        description: "Due date"
+
+  - name: stg_jira_users
+    description: "Staging layer for Jira users data with cleaned and standardized column names"
+    columns:
+      - name: account_id
+        description: "Unique identifier for the user"
+        tests:
+          - unique
+          - not_null
+      - name: display_name
+        description: "User's display name"
+      - name: email_address
+        description: "User's email address"
+      - name: active
+        description: "Whether the user is active"
+      - name: time_zone
+        description: "User's time zone"
+
+  - name: stg_jira_projects
+    description: "Staging layer for Jira projects data with cleaned and standardized column names"
+    columns:
+      - name: project_id
+        description: "Unique identifier for the project"
+        tests:
+          - unique
+          - not_null
+      - name: project_key
+        description: "Project key (e.g., PROJ)"
+        tests:
+          - unique
+          - not_null
+      - name: project_name
+        description: "Project name"
+      - name: description
+        description: "Project description"
+      - name: project_lead_id
+        description: "Account ID of the project lead"
+      - name: project_lead_name
+        description: "Display name of the project lead"
+      - name: project_type_key
+        description: "Project type key"
+      - name: api_issue_count
+        description: "Total number of issues in the project (from API)"
+      - name: last_issue_update_time
+        description: "Timestamp of the last issue update"
+
+  - name: stg_jira_changelog
+    description: "Staging layer for Jira changelog data with cleaned and standardized column names"
+    columns:
+      - name: history_id
+        description: "Unique identifier for the history record"
+      - name: issue_dlt_id
+        description: "DLT ID of the issue this history belongs to"
+      - name: author_id
+        description: "Account ID of the user who made the change"
+      - name: change_date
+        description: "Timestamp when the change was made"
+      - name: field
+        description: "Field that was changed (e.g., status, assignee)"
+      - name: from_string
+        description: "Previous value"
+      - name: to_string
+        description: "New value"
