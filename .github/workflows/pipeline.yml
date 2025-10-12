@@ -36,7 +36,6 @@ on:
 
 env:
   PYTHON_VERSION: '3.12'
-  POSTGRES_VERSION: '15'
 
 jobs:
   pipeline:
@@ -45,7 +44,7 @@ jobs:
     
     services:
       postgres:
-        image: postgres:${{ env.POSTGRES_VERSION }}
+        image: postgres:15
         env:
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
@@ -84,15 +83,15 @@ jobs:
     - name: Run DLT Pipeline
       env:
         # Jira API credentials (DLT will read these automatically)
-        JIRA_SUBDOMAIN: ${{ secrets.JIRA_SUBDOMAIN }}
-        JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-        JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        SUBDOMAIN: ${{ secrets.JIRA_SUBDOMAIN }}
+        EMAIL: ${{ secrets.JIRA_EMAIL }}
+        API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
         # PostgreSQL credentials (DLT will read these automatically)
-        POSTGRES_HOST: localhost
-        POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
-        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+        DESTINATION__POSTGRES__CREDENTIALS__HOST: localhost
+        DESTINATION__POSTGRES__CREDENTIALS__PORT: ${{ secrets.POSTGRES_PORT }}
+        DESTINATION__POSTGRES__CREDENTIALS__USERNAME: ${{ secrets.POSTGRES_USER }}
+        DESTINATION__POSTGRES__CREDENTIALS__PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        DESTINATION__POSTGRES__CREDENTIALS__DATABASE: ${{ secrets.POSTGRES_DB }}
       run: |
         echo "🚀 Running DLT pipeline..."
         case "${{ github.event.inputs.run_type || 'full' }}" in
