@@ -1,0 +1,132 @@
+version: 2
+
+sources:
+  - name: jira_data
+    description: "Raw data from Jira API loaded via dlt"
+    database: jira_dw
+    schema: jira_data
+    tables:
+      - name: issues
+        description: "Jira issues data containing all issue details including fields, status, assignees, etc."
+        columns:
+          - name: id
+            description: "Unique identifier for the issue"
+            tests:
+              - unique
+              - not_null
+          - name: key
+            description: "Issue key (e.g., PROJ-123)"
+            tests:
+              - unique
+              - not_null
+          - name: fields__summary
+            description: "Issue summary/title"
+          - name: fields__issuetype__name
+            description: "Issue type (e.g., Bug, Task, Story)"
+          - name: fields__status__name
+            description: "Current status name"
+          - name: fields__status__status_category__name
+            description: "Status category (To Do, In Progress, Done)"
+          - name: fields__priority__name
+            description: "Priority level"
+          - name: fields__assignee__account_id
+            description: "Account ID of the assignee"
+          - name: fields__reporter__account_id
+            description: "Account ID of the reporter"
+          - name: fields__project__id
+            description: "Project ID"
+          - name: fields__created
+            description: "Creation timestamp"
+          - name: fields__updated
+            description: "Last update timestamp"
+          - name: fields__resolutiondate
+            description: "Resolution timestamp"
+          - name: fields__duedate
+            description: "Due date"
+
+      - name: projects
+        description: "Jira projects data including project details, leads, and metadata"
+        columns:
+          - name: id
+            description: "Unique identifier for the project"
+            tests:
+              - unique
+              - not_null
+          - name: key
+            description: "Project key (e.g., PROJ)"
+            tests:
+              - unique
+              - not_null
+          - name: name
+            description: "Project name"
+          - name: description
+            description: "Project description"
+          - name: lead__account_id
+            description: "Account ID of the project lead"
+          - name: lead__display_name
+            description: "Display name of the project lead"
+          - name: project_type_key
+            description: "Project type key"
+          - name: insight__total_issue_count
+            description: "Total number of issues in the project"
+          - name: insight__last_issue_update_time
+            description: "Timestamp of the last issue update"
+
+      - name: users
+        description: "Jira users data including user details and preferences"
+        columns:
+          - name: account_id
+            description: "Unique identifier for the user"
+            tests:
+              - unique
+              - not_null
+          - name: display_name
+            description: "User's display name"
+          - name: email_address
+            description: "User's email address"
+          - name: active
+            description: "Whether the user is active"
+          - name: time_zone
+            description: "User's time zone"
+
+      - name: issues__changelog__histories
+        description: "Issue change history records"
+        columns:
+          - name: id
+            description: "Unique identifier for the history record"
+          - name: issue_id
+            description: "ID of the issue this history belongs to"
+          - name: author__account_id
+            description: "Account ID of the user who made the change"
+          - name: created
+            description: "Timestamp when the change was made"
+
+      - name: issues__changelog__histories__items
+        description: "Individual change items within issue history"
+        columns:
+          - name: history_id
+            description: "ID of the history record this item belongs to"
+          - name: issue_id
+            description: "ID of the issue this change item belongs to"
+          - name: field
+            description: "Field that was changed (e.g., status, assignee)"
+          - name: from_string
+            description: "Previous value"
+          - name: to_string
+            description: "New value"
+
+      - name: issues__fields__comment__comments
+        description: "Issue comments"
+        columns:
+          - name: id
+            description: "Unique identifier for the comment"
+          - name: parent_id
+            description: "ID of the issue this comment belongs to"
+          - name: author__account_id
+            description: "Account ID of the comment author"
+          - name: created
+            description: "Timestamp when the comment was created"
+          - name: updated
+            description: "Timestamp when the comment was last updated"
+          - name: body
+            description: "Comment text"

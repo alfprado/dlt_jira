@@ -27,7 +27,7 @@ DEFAULT_ENDPOINTS = {
         "data_path": "values",
         "api_path": "rest/api/3/project/search",
         "params": {
-            "expand": "description,lead,issueTypes,url,projectKeys,permissions,insight"
+            "status": "live,archived,deleted"
         },
     },
 }

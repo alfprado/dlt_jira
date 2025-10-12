@@ -1,0 +1,362 @@
+version: 2
+
+models:
+  - name: dim_projects
+    description: "Project dimension with SCD Type 1, progress metrics, lead information, and status indicators"
+    columns:
+      - name: project_key
+        description: "Unique project key (SCD primary key)"
+        tests:
+          - unique
+          - not_null
+      - name: project_id
+        description: "Project identifier"
+        tests:
+          - not_null
+      - name: project_name
+        description: "Project name"
+        tests:
+          - not_null
+      - name: description
+        description: "Project description"
+      - name: project_lead_id
+        description: "Project lead account ID"
+      - name: project_lead_name
+        description: "Project lead display name"
+      - name: project_type_key
+        description: "Project type identifier"
+      - name: api_issue_count
+        description: "Issue count reported by API"
+      - name: actual_issue_count
+        description: "Actual issue count from issues table"
+      - name: completed_issues
+        description: "Number of completed issues"
+      - name: completion_percentage
+        description: "Project completion percentage"
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+                inclusive: true
+      - name: first_issue_date
+        description: "Date of first issue created"
+      - name: last_issue_update
+        description: "Date of most recent issue update"
+      - name: project_status
+        description: "Project status category (New, Active, In Progress, Completed)"
+      - name: lead_display_name
+        description: "Project lead full name from users table"
+      - name: lead_email
+        description: "Project lead email address"
+      - name: is_current
+        description: "Whether this is the current version of the record (SCD Type 1)"
+        tests:
+          - not_null
+      - name: valid_from_dttm
+        description: "When this version became valid"
+        tests:
+          - not_null
+      - name: valid_to_dttm
+        description: "When this version became invalid (NULL for current records)"
+      - name: updated_dttm
+        description: "When this record was last updated"
+      - name: scd_type
+        description: "Type of SCD implementation"
+
+  - name: dim_users
+    description: "User dimension with SCD Type 1, activity metrics and performance indicators"
+    columns:
+      - name: user_key
+        description: "Unique user key (SCD primary key)"
+        tests:
+          - unique
+          - not_null
+      - name: user_id
+        description: "User account identifier"
+        tests:
+          - not_null
+      - name: account_id
+        description: "User account ID (business key)"
+        tests:
+          - not_null
+      - name: display_name
+        description: "User display name"
+        tests:
+          - not_null
+      - name: email_address
+        description: "User email address"
+      - name: active
+        description: "Whether the user is active"
+      - name: time_zone
+        description: "User time zone"
+      - name: assigned_issues
+        description: "Number of issues assigned to user"
+      - name: reported_issues
+        description: "Number of issues reported by user"
+      - name: completed_issues
+        description: "Number of completed issues"
+      - name: completion_rate
+        description: "Percentage of assigned issues completed"
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+                inclusive: true
+      - name: first_assignment_date
+        description: "Date of first issue assignment"
+      - name: last_activity_date
+        description: "Date of most recent activity"
+      - name: first_reported_date
+        description: "Date of first reported issue"
+      - name: last_reported_date
+        description: "Date of most recent reported issue"
+      - name: projects_count
+        description: "Number of projects user is involved in"
+      - name: activity_status
+        description: "User activity status (Recent Activity, Active, Inactive, No Activity)"
+      - name: is_current
+        description: "Whether this is the current version of the record (SCD Type 1)"
+        tests:
+          - not_null
+      - name: valid_from_dttm
+        description: "When this version became valid"
+        tests:
+          - not_null
+      - name: valid_to_dttm
+        description: "When this version became invalid (NULL for current records)"
+      - name: updated_dttm
+        description: "When this record was last updated"
+      - name: scd_type
+        description: "Type of SCD implementation"
+
+  - name: fct_issues_details
+    description: "Cumulative snapshot fact table for issues with comprehensive metrics and flags"
+    columns:
+      - name: issue_key
+        description: "Issue key (e.g., PROJ-123) - Primary key"
+        tests:
+          - unique
+          - not_null
+      - name: issue_id
+        description: "Unique issue identifier"
+        tests:
+          - not_null
+      - name: issue_type
+        description: "Issue type (Bug, Task, Story, etc.)"
+      - name: status
+        description: "Current status name"
+      - name: priority
+        description: "Priority level"
+      - name: project_id
+        description: "Project ID"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_projects')
+              field: project_id
+      - name: assignee_id
+        description: "Assignee account ID"
+        tests:
+          - relationships:
+              to: ref('dim_users')
+              field: account_id
+      - name: reporter_id
+        description: "Reporter account ID"
+        tests:
+          - relationships:
+              to: ref('dim_users')
+              field: account_id
+      - name: summary
+        description: "Issue summary/title"
+      - name: status_category
+        description: "Status category (To Do, In Progress, Done)"
+      - name: resolution
+        description: "Resolution type"
+      - name: created_date
+        description: "Issue creation date"
+        tests:
+          - not_null
+      - name: updated_date
+        description: "Issue last update date"
+      - name: resolution_date
+        description: "Issue resolution date"
+      - name: due_date
+        description: "Issue due date"
+      - name: days_to_resolution
+        description: "Days from creation to resolution"
+      - name: days_since_creation
+        description: "Days since issue was created"
+      - name: days_overdue
+        description: "Days past due date (if overdue)"
+      - name: is_overdue
+        description: "Whether the issue is overdue"
+      - name: is_completed
+        description: "Whether the issue is completed"
+      - name: is_recent
+        description: "Whether the issue was created in the last 7 days"
+      - name: change_count
+        description: "Number of changes to the issue"
+      - name: status_change_count
+        description: "Number of status changes"
+      - name: assignee_change_count
+        description: "Number of assignee changes"
+      - name: work_status
+        description: "Work status category (Backlog, In Progress, Completed, Other)"
+      - name: age_bucket
+        description: "Age category (This Week, This Month, Last 3 Months, Older)"
+      - name: snapshot_dttm
+        description: "When this snapshot was taken"
+        tests:
+          - not_null
+      - name: snapshot_date
+        description: "Date when this snapshot was taken"
+      - name: fact_type
+        description: "Type of fact table (CUMULATIVE_SNAPSHOT)"
+
+  - name: fct_transitions
+    description: "Transaction fact table for issue transitions supporting CFD/WIP visualizations"
+    columns:
+      - name: transition_key
+        description: "Unique transition identifier"
+        tests:
+          - unique
+          - not_null
+      - name: history_id
+        description: "History record ID"
+      - name: issue_dlt_id
+        description: "Issue DLT ID"
+      - name: issue_key
+        description: "Issue key (e.g., PROJ-123)"
+        tests:
+          - not_null
+      - name: issue_id
+        description: "Issue identifier"
+        tests:
+          - not_null
+      - name: project_id
+        description: "Project ID"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_projects')
+              field: project_id
+      - name: assignee_id
+        description: "Assignee account ID"
+        tests:
+          - relationships:
+              to: ref('dim_users')
+              field: account_id
+      - name: reporter_id
+        description: "Reporter account ID"
+        tests:
+          - relationships:
+              to: ref('dim_users')
+              field: account_id
+      - name: transition_field
+        description: "Field that was changed (status, assignee, priority, issuetype)"
+      - name: from_value
+        description: "Previous value"
+      - name: to_value
+        description: "New value"
+      - name: transition_date
+        description: "When the transition occurred"
+        tests:
+          - not_null
+      - name: transition_author_id
+        description: "User who made the transition"
+      - name: issue_type
+        description: "Issue type"
+      - name: priority
+        description: "Issue priority"
+      - name: issue_created_date
+        description: "When the issue was created"
+      - name: issue_resolution_date
+        description: "When the issue was resolved"
+      - name: status_category
+        description: "Status category after transition"
+      - name: status_order
+        description: "Numeric order of status (1=Backlog, 2=In Progress, 3=Review, 4=Done)"
+      - name: previous_change_date
+        description: "Date of previous change to same field"
+      - name: days_since_creation
+        description: "Days since issue creation at time of transition"
+      - name: days_to_resolution
+        description: "Days to resolution (if resolved)"
+      - name: time_in_previous_status
+        description: "Time spent in previous status"
+      - name: transition_type
+        description: "Type of transition (Status Change, Assignment Change, etc.)"
+      - name: workflow_stage
+        description: "Workflow stage after transition"
+      - name: fact_type
+        description: "Type of fact table (TRANSACTION_FACT)"
+
+  - name: fct_user_performance
+    description: "User performance metrics by project, status category, and time period"
+    columns:
+      - name: user_id
+        description: "User account ID"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_users')
+              field: account_id
+      - name: user_name
+        description: "User display name"
+      - name: user_email
+        description: "User email address"
+      - name: is_active
+        description: "Whether the user is active"
+      - name: project_id
+        description: "Project ID"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_projects')
+              field: project_id
+      - name: project_key
+        description: "Project key"
+      - name: project_name
+        description: "Project name"
+      - name: status_category
+        description: "Issue status category"
+      - name: time_period
+        description: "Time period bucket (Current Month, Last Month, Last 3 Months, Older)"
+      - name: assigned_issues
+        description: "Number of issues assigned to user"
+        tests:
+          - not_null
+      - name: completed_issues
+        description: "Number of completed issues"
+      - name: overdue_issues
+        description: "Number of overdue issues"
+      - name: bug_count
+        description: "Number of bug issues"
+      - name: high_priority_issues
+        description: "Number of high priority issues"
+      - name: earliest_issue_date
+        description: "Date of earliest issue"
+      - name: latest_update_date
+        description: "Date of most recent update"
+      - name: avg_days_to_resolution
+        description: "Average days to resolution"
+      - name: min_days_to_resolution
+        description: "Minimum days to resolution"
+      - name: max_days_to_resolution
+        description: "Maximum days to resolution"
+      - name: completion_rate
+        description: "Percentage of assigned issues completed"
+      - name: on_time_delivery_rate
+        description: "Percentage of issues delivered on time"
+      - name: reported_issues
+        description: "Number of issues reported by user"
+      - name: resolved_reported_issues
+        description: "Number of resolved issues reported by user"
+      - name: activity_fields_changed
+        description: "Number of fields changed by user"
+      - name: status_changes
+        description: "Number of status changes by user"
+      - name: performance_category
+        description: "Performance category (High Performer, Medium Performer, Needs Improvement, No Issues)"

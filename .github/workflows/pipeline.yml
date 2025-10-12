@@ -1,0 +1,266 @@
+name: DLT + DBT Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'jira/**'
+      - 'dbt/**'
+      - 'jira_pipeline.py'
+      - 'Dockerfile.*'
+      - '.dlt/**'
+      - 'requirements.txt'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'jira/**'
+      - 'dbt/**'
+      - 'jira_pipeline.py'
+      - 'Dockerfile.*'
+      - '.dlt/**'
+      - 'requirements.txt'
+  schedule:
+    - cron: '0 2 * * *'  # Run daily at 2 AM UTC
+  workflow_dispatch:
+    inputs:
+      run_type:
+        description: 'Type of run'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - incremental
+          - staging-only
+          - marts-only
+
+env:
+  PYTHON_VERSION: '3.12'
+  POSTGRES_VERSION: '15'
+
+jobs:
+  pipeline:
+    name: Run DLT + DBT Pipeline
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:${{ env.POSTGRES_VERSION }}
+        env:
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install dbt-core dbt-postgres
+
+    - name: Wait for PostgreSQL
+      run: |
+        until pg_isready -h localhost -p 5432 -U ${{ secrets.POSTGRES_USER }}; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+
+    - name: Run DLT Pipeline
+      env:
+        # Jira API credentials (DLT will read these automatically)
+        JIRA_SUBDOMAIN: ${{ secrets.JIRA_SUBDOMAIN }}
+        JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+        JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        # PostgreSQL credentials (DLT will read these automatically)
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      run: |
+        echo "🚀 Running DLT pipeline..."
+        case "${{ github.event.inputs.run_type || 'full' }}" in
+          "incremental")
+            python jira_pipeline.py incremental
+            ;;
+          "staging-only")
+            python jira_pipeline.py staging
+            ;;
+          *)
+            python jira_pipeline.py all
+            ;;
+        esac
+        echo "✅ DLT pipeline completed"
+
+    - name: Verify data extraction
+      env:
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      run: |
+        python -c "
+        import psycopg2
+        conn = psycopg2.connect(
+            host='localhost',
+            port='${{ secrets.POSTGRES_PORT }}',
+            user='${{ secrets.POSTGRES_USER }}',
+            password='${{ secrets.POSTGRES_PASSWORD }}',
+            database='${{ secrets.POSTGRES_DB }}'
+        )
+        cur = conn.cursor()
+        cur.execute('SELECT COUNT(*) FROM jira_data.issues;')
+        count = cur.fetchone()[0]
+        print(f'📊 Issues extracted: {count}')
+        if count == 0:
+            raise Exception('No data extracted!')
+        conn.close()
+        print('✅ Data verification passed')
+        "
+
+    - name: Install dbt packages
+      env:
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      run: |
+        cd dbt
+        dbt deps --profiles-dir .
+
+    - name: Run DBT models
+      env:
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      run: |
+        cd dbt
+        echo "🔄 Running DBT models..."
+        case "${{ github.event.inputs.run_type || 'full' }}" in
+          "staging-only")
+            dbt run --select staging --profiles-dir .
+            ;;
+          "marts-only")
+            dbt run --select marts --profiles-dir .
+            ;;
+          "incremental")
+            dbt run --select state:modified+ --profiles-dir .
+            ;;
+          *)
+            dbt run --profiles-dir .
+            ;;
+        esac
+        echo "✅ DBT models completed"
+
+    - name: Run DBT tests
+      env:
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      run: |
+        cd dbt
+        echo "🧪 Running DBT tests..."
+        dbt test --profiles-dir .
+        echo "✅ All tests passed"
+
+    - name: Generate DBT docs
+      env:
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      run: |
+        cd dbt
+        echo "📚 Generating DBT documentation..."
+        dbt docs generate --profiles-dir .
+
+    - name: Upload DBT artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dbt-artifacts-${{ github.run_id }}
+        path: dbt/target/
+        retention-days: 7
+
+    - name: Validate dashboard queries
+      env:
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      run: |
+        python -c "
+        import psycopg2
+        import pandas as pd
+        
+        conn = psycopg2.connect(
+            host='localhost',
+            port='${{ secrets.POSTGRES_PORT }}',
+            user='${{ secrets.POSTGRES_USER }}',
+            password='${{ secrets.POSTGRES_PASSWORD }}',
+            database='${{ secrets.POSTGRES_DB }}'
+        )
+        
+        print('🔍 Testing dashboard queries...')
+        
+        # Test critical dashboard queries
+        queries = [
+            ('Issues Details', '''
+                SELECT issue_key, summary, assignee_name, project_name, days_to_resolution
+                FROM jira_analytics.fct_issues_details
+                LIMIT 1
+            '''),
+            ('Projects Overview', '''
+                SELECT project_name, total_issues, completion_percentage
+                FROM jira_analytics.dim_projects
+                LIMIT 1
+            '''),
+            ('Team Performance', '''
+                SELECT user_name, status_category, assigned_issues
+                FROM jira_analytics.fct_user_performance
+                LIMIT 1
+            ''')
+        ]
+        
+        for name, query in queries:
+            try:
+                df = pd.read_sql(query, conn)
+                print(f'✅ {name}: {len(df)} rows')
+            except Exception as e:
+                print(f'❌ {name}: {e}')
+                exit(1)
+        
+        conn.close()
+        print('✅ All dashboard queries working')
+        "
+
+    - name: Summary
+      run: |
+        echo "🎉 Pipeline completed successfully!"
+        echo "📊 Data extracted and transformed"
+        echo "🧪 All tests passed"
+        echo "📚 Documentation generated"
+        echo "✅ Dashboard queries validated"
