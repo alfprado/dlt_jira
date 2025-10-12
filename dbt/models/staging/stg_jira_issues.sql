@@ -47,14 +47,6 @@ SELECT
     -- Resolution information
     fields__resolution__name AS resolution,
     
-    -- Labels and components (as arrays) - commented out as fields may not exist
-    -- fields__labels AS labels,
-    -- fields__components AS components,
-    
-    -- Time tracking (if available) - commented out as fields may not exist
-    -- fields__timeoriginalestimate AS original_estimate_seconds,
-    -- fields__timespent AS time_spent_seconds,
-    
     -- Additional metadata
     _dlt_id
 
