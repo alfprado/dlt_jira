@@ -1,0 +1,41 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Copiar arquivos de requisitos e instalar dependências
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar código fonte
+COPY jira/ /app/jira/
+COPY jira_pipeline.py /app/
+COPY .dlt/ /app/.dlt/
+
+# Configurar variáveis de ambiente
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Criar script para atualizar secrets.toml com variáveis de ambiente
+RUN echo '#!/bin/sh\n\
+# Atualizar secrets.toml com as variáveis de ambiente\n\
+cat > /app/.dlt/secrets.toml << EOF\n\
+[sources.jira]\n\
+subdomain = "${JIRA_SUBDOMAIN}"\n\
+email = "${JIRA_EMAIL}"\n\
+api_token = "${JIRA_API_TOKEN}"\n\
+\n\
+# PostgreSQL Configuration\n\
+[destination.postgres.credentials]\n\
+database = "${POSTGRES_DB}"\n\
+password = "${POSTGRES_PASSWORD}"\n\
+username = "${POSTGRES_USER}"\n\
+host = "postgres"\n\
+port = ${POSTGRES_PORT}\n\
+connect_timeout = 15\n\
+EOF\n\
+\n\
+python jira_pipeline.py all\n\
+' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
+# Comando padrão
+CMD ["/app/entrypoint.sh"]
