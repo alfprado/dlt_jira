@@ -19,8 +19,8 @@ on:
       - 'Dockerfile.*'
       - '.dlt/**'
       - 'requirements.txt'
-  schedule:
-    - cron: '0 2 * * *'  # Run daily at 2 AM UTC
+  #schedule:
+  #  - cron: '0 2 * * *'  # Run daily at 2 AM UTC
   workflow_dispatch:
     inputs:
       run_type:
