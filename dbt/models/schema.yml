@@ -34,6 +34,7 @@ models:
       - name: completion_percentage
         description: "Project completion percentage"
         tests:
+          - not_null
           - dbt_utils.accepted_range:
               arguments:
                 min_value: 0
@@ -99,6 +100,7 @@ models:
       - name: completion_rate
         description: "Percentage of assigned issues completed"
         tests:
+          - not_null
           - dbt_utils.accepted_range:
               arguments:
                 min_value: 0
@@ -154,20 +156,23 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('dim_projects')
-              field: project_id
+              arguments:
+                to: ref('dim_projects')
+                field: project_id
       - name: assignee_id
         description: "Assignee account ID"
         tests:
           - relationships:
-              to: ref('dim_users')
-              field: account_id
+              arguments:
+                to: ref('dim_users')
+                field: account_id
       - name: reporter_id
         description: "Reporter account ID"
         tests:
           - relationships:
-              to: ref('dim_users')
-              field: account_id
+              arguments:
+                to: ref('dim_users')
+                field: account_id
       - name: summary
         description: "Issue summary/title"
       - name: status_category
@@ -240,20 +245,23 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('dim_projects')
-              field: project_id
+              arguments:
+                to: ref('dim_projects')
+                field: project_id
       - name: assignee_id
         description: "Assignee account ID"
         tests:
           - relationships:
-              to: ref('dim_users')
-              field: account_id
+              arguments:
+                to: ref('dim_users')
+                field: account_id
       - name: reporter_id
         description: "Reporter account ID"
         tests:
           - relationships:
-              to: ref('dim_users')
-              field: account_id
+              arguments:
+                to: ref('dim_users')
+                field: account_id
       - name: transition_field
         description: "Field that was changed (status, assignee, priority, issuetype)"
       - name: from_value
@@ -301,8 +309,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('dim_users')
-              field: account_id
+              arguments:
+                to: ref('dim_users')
+                field: account_id
       - name: user_name
         description: "User display name"
       - name: user_email
@@ -314,8 +323,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('dim_projects')
-              field: project_id
+              arguments:
+                to: ref('dim_projects')
+                field: project_id
       - name: project_key
         description: "Project key"
       - name: project_name

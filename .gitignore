@@ -1,16 +1,92 @@
-# ignore secrets, virtual environments and typical python compilation artifacts
-secrets.toml
-# ignore basic python artifacts
+# Environment files
 .env
-**/__pycache__/
-**/*.py[cod]
-**/*$py.class
-# ignore duckdb
-*.duckdb
-*.wal
+.env.local
+.env.production
+.env.staging
+
+# DLT configuration
+.dlt/secrets.toml
+.dlt/config.toml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
 py312/
-# dbt artifacts
-target/
-dbt_packages/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
 logs/
-dbt_project.yml.sig
+*.log
+dbt/logs/
+dbt/target/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
+.dockerignore
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+
+# DBT packages (auto-generated)
+dbt/dbt_packages/
+dbt/package-lock.yml
+
+# DBT artifacts (keep some, ignore others)
+dbt/target/run/
+dbt/target/compiled/
+dbt/target/graph.gpickle
+dbt/target/partial_parse.msgpack
+dbt/target/manifest.json
+dbt/target/catalog.json
+dbt/target/run_results.json
+
+# Keep important DBT files
+!dbt/target/index.html
+!dbt/target/graph_summary.json

@@ -12,6 +12,7 @@ macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
 target-path: "target"
+log-path: "logs"
 clean-targets:
   - "target"
   - "dbt_packages"
@@ -22,3 +23,13 @@ models:
       +materialized: view
     marts:
       +materialized: table
+
+# Conditional test configuration
+vars:
+  load_projects: true
+  load_users: true
+
+# Test configuration based on variables
+tests:
+  jira_analytics:
+    +enabled: "{{ var('load_projects', true) and var('load_users', true) }}"

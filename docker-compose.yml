@@ -1,25 +1,21 @@
-version: '3.8'
-
-# Carrega variáveis do arquivo .env
-# Este arquivo deve conter todas as variáveis de ambiente necessárias
-
 services:
   postgres:
     image: postgres:15
     container_name: jira_postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:-dlt_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dlt_password}
+      POSTGRES_DB: ${POSTGRES_DB:-jira_dw}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dlt_user} -d ${POSTGRES_DB:-jira_dw}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   dlt:
     build:
@@ -30,50 +26,49 @@ services:
       - JIRA_SUBDOMAIN=${JIRA_SUBDOMAIN}
       - JIRA_EMAIL=${JIRA_EMAIL}
       - JIRA_API_TOKEN=${JIRA_API_TOKEN}
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_USER=${POSTGRES_USER:-dlt_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-dlt_password}
+      - POSTGRES_DB=${POSTGRES_DB:-jira_dw}
+      - DOCKER_CONTAINER=true
+    volumes:
+      - ./.dlt:/app/.dlt
+      - ./dbt:/app/dbt
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - ./.dlt:/app/.dlt
-
-  dbt:
-    build:
-      context: .
-      dockerfile: Dockerfile.dbt
-    container_name: jira_dbt
-    environment:
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-    depends_on:
-      - dlt
+    restart: "no"  # Don't restart automatically
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+    # Use entrypoint script to create secrets.toml and run pipeline
+    entrypoint: ["/app/entrypoint.sh"]
 
   grafana:
     image: grafana/grafana:latest
     container_name: jira_grafana
     environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_USER=${POSTGRES_USER:-dlt_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-dlt_password}
+      - POSTGRES_DB=${POSTGRES_DB:-jira_dw}
     ports:
       - "3000:3000"
-    depends_on:
-      - postgres
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
       - ./grafana/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   postgres_data:

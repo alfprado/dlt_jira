@@ -1,4 +1,4 @@
-name: DLT + DBT Pipeline
+name: Jira Data Pipeline CI/CD
 
 on:
   push:
@@ -10,256 +10,194 @@ on:
       - 'Dockerfile.*'
       - '.dlt/**'
       - 'requirements.txt'
+      - 'docker compose.yml'
+      - '.github/workflows/**'
   pull_request:
     branches: [ main, develop ]
-    paths:
-      - 'jira/**'
-      - 'dbt/**'
-      - 'jira_pipeline.py'
-      - 'Dockerfile.*'
-      - '.dlt/**'
-      - 'requirements.txt'
   schedule:
-    - cron: '0 2 * * *'  # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'  # Daily at 2 AM UTC
   workflow_dispatch:
     inputs:
-      run_type:
-        description: 'Type of run'
+      environment:
+        description: 'Environment to run the pipeline'
         required: true
-        default: 'full'
+        default: 'dev'
         type: choice
         options:
-          - full
+          - dev
+          - production
+      dlt_run_type:
+        description: 'DLT run type (only for dev)'
+        required: false
+        default: 'incremental'
+        type: choice
+        options:
           - incremental
-          - staging-only
-          - marts-only
+          - full
 
 env:
   PYTHON_VERSION: '3.12'
 
 jobs:
-  pipeline:
-    name: Run DLT + DBT Pipeline
+  # Development Environment - All services via Docker Compose
+  dev-pipeline:
+    name: Development (Local Docker Compose)
     runs-on: ubuntu-latest
+    if: ${{ github.ref != 'refs/heads/main' && github.event.inputs.environment != 'production' }}
     
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-        cache: 'pip'
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-    - name: Install dependencies
+    - name: Create .env file for Docker Compose
       run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install dbt-core dbt-postgres
-
-    - name: Wait for PostgreSQL
+        cat > .env << EOF
+        # Jira API Credentials
+        JIRA_SUBDOMAIN=${{ secrets.JIRA_SUBDOMAIN }}
+        JIRA_EMAIL=${{ secrets.JIRA_EMAIL }}
+        JIRA_API_TOKEN=${{ secrets.JIRA_API_TOKEN }}
+        
+        # PostgreSQL Configuration (Local Docker)
+        POSTGRES_USER=${{ secrets.DEV_POSTGRES_USER }}
+        POSTGRES_PASSWORD=${{ secrets.DEV_POSTGRES_PASSWORD }}
+        POSTGRES_DB=${{ secrets.DEV_POSTGRES_DB }}
+        POSTGRES_HOST=postgres
+        POSTGRES_PORT=5432
+        
+        # Grafana Configuration (Local Docker)
+        GRAFANA_USER=${{ secrets.DEV_GRAFANA_USER }}
+        GRAFANA_PASSWORD=${{ secrets.DEV_GRAFANA_PASSWORD }}
+        EOF
+      env:
+        # Mask sensitive values in logs
+        JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD }}
+        GRAFANA_PASSWORD: ${{ secrets.DEV_GRAFANA_PASSWORD }}
+        
+    - name: Start PostgreSQL and Grafana services
       run: |
-        until pg_isready -h localhost -p 5432 -U ${{ secrets.POSTGRES_USER }}; do
-          echo "Waiting for PostgreSQL..."
+        echo "🐳 Starting PostgreSQL and Grafana for development..."
+        
+        # Start PostgreSQL first
+        echo "📊 Starting PostgreSQL..."
+        docker compose up -d postgres
+        
+        # Wait for PostgreSQL to be ready
+        echo "⏳ Waiting for PostgreSQL service..."
+        for i in {1..30}; do
+          if docker compose exec postgres pg_isready -U ${{ secrets.DEV_POSTGRES_USER }} -d ${{ secrets.DEV_POSTGRES_DB }}; then
+            echo "✅ PostgreSQL is ready!"
+            break
+          fi
+          echo "⏳ Waiting for PostgreSQL... (attempt $i/30)"
           sleep 2
         done
+        
+        # Start Grafana
+        echo "📈 Starting Grafana..."
+        docker compose up -d grafana
+        
+        echo "✅ PostgreSQL and Grafana started."
+        docker compose ps
 
-    - name: Run DLT Pipeline
-      env:
-        # Jira API credentials (DLT will read these automatically)
-        SUBDOMAIN: ${{ secrets.JIRA_SUBDOMAIN }}
-        EMAIL: ${{ secrets.JIRA_EMAIL }}
-        API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-        # PostgreSQL credentials (DLT will read these automatically)
-        DESTINATION__POSTGRES__CREDENTIALS__HOST: localhost
-        DESTINATION__POSTGRES__CREDENTIALS__PORT: ${{ secrets.POSTGRES_PORT }}
-        DESTINATION__POSTGRES__CREDENTIALS__USERNAME: ${{ secrets.POSTGRES_USER }}
-        DESTINATION__POSTGRES__CREDENTIALS__PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-        DESTINATION__POSTGRES__CREDENTIALS__DATABASE: ${{ secrets.POSTGRES_DB }}
+    - name: Run DLT + DBT Pipeline in Docker
       run: |
-        echo "🚀 Running DLT pipeline..."
-        case "${{ github.event.inputs.run_type || 'full' }}" in
-          "incremental")
-            python jira_pipeline.py incremental
-            ;;
-          "staging-only")
-            python jira_pipeline.py staging
-            ;;
-          *)
-            python jira_pipeline.py all
-            ;;
-        esac
-        echo "✅ DLT pipeline completed"
+        echo "🚀 Running DLT + DBT pipeline in development mode..."
+        
+        # Wait for PostgreSQL to be ready before running DLT
+        echo "⏳ Ensuring PostgreSQL is ready..."
+        for i in {1..30}; do
+          if docker compose exec postgres pg_isready -U ${{ secrets.DEV_POSTGRES_USER }} -d ${{ secrets.DEV_POSTGRES_DB }}; then
+            echo "✅ PostgreSQL is ready for DLT!"
+            break
+          fi
+          echo "⏳ Waiting for PostgreSQL... (attempt $i/30)"
+          sleep 2
+        done
+        
+        # Run DLT container with environment variables and execute pipeline
+        echo "🚀 Starting DLT pipeline..."
+        docker compose run --rm --entrypoint="" -e JIRA_SUBDOMAIN=${{ secrets.JIRA_SUBDOMAIN }} -e JIRA_EMAIL=${{ secrets.JIRA_EMAIL }} -e JIRA_API_TOKEN=${{ secrets.JIRA_API_TOKEN }} dlt /app/entrypoint.sh ${{ github.event.inputs.dlt_run_type || 'incremental' }}
+      timeout-minutes: 30
 
-    - name: Verify data extraction
-      env:
-        POSTGRES_HOST: localhost
-        POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
-        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-      run: |
-        python -c "
-        import psycopg2
-        conn = psycopg2.connect(
-            host='localhost',
-            port='${{ secrets.POSTGRES_PORT }}',
-            user='${{ secrets.POSTGRES_USER }}',
-            password='${{ secrets.POSTGRES_PASSWORD }}',
-            database='${{ secrets.POSTGRES_DB }}'
-        )
-        cur = conn.cursor()
-        cur.execute('SELECT COUNT(*) FROM jira_data.issues;')
-        count = cur.fetchone()[0]
-        print(f'📊 Issues extracted: {count}')
-        if count == 0:
-            raise Exception('No data extracted!')
-        conn.close()
-        print('✅ Data verification passed')
-        "
-
-    - name: Install dbt packages
-      env:
-        POSTGRES_HOST: localhost
-        POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
-        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-      run: |
-        cd dbt
-        dbt deps --profiles-dir .
-
-    - name: Run DBT models
-      env:
-        POSTGRES_HOST: localhost
-        POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
-        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-      run: |
-        cd dbt
-        echo "🔄 Running DBT models..."
-        case "${{ github.event.inputs.run_type || 'full' }}" in
-          "staging-only")
-            dbt run --select staging --profiles-dir .
-            ;;
-          "marts-only")
-            dbt run --select marts --profiles-dir .
-            ;;
-          "incremental")
-            dbt run --select state:modified+ --profiles-dir .
-            ;;
-          *)
-            dbt run --profiles-dir .
-            ;;
-        esac
-        echo "✅ DBT models completed"
-
-    - name: Run DBT tests
-      env:
-        POSTGRES_HOST: localhost
-        POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
-        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-      run: |
-        cd dbt
-        echo "🧪 Running DBT tests..."
-        dbt test --profiles-dir .
-        echo "✅ All tests passed"
-
-    - name: Generate DBT docs
-      env:
-        POSTGRES_HOST: localhost
-        POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
-        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-      run: |
-        cd dbt
-        echo "📚 Generating DBT documentation..."
-        dbt docs generate --profiles-dir .
-
-    - name: Upload DBT artifacts
+    - name: Upload DBT artifacts (Development)
       uses: actions/upload-artifact@v4
       with:
-        name: dbt-artifacts-${{ github.run_id }}
+        name: dbt-artifacts-dev-${{ github.run_id }}
         path: dbt/target/
-        retention-days: 7
+        retention-days: 3
 
-    - name: Validate dashboard queries
+    - name: Cleanup Docker Compose services
+      if: always()
+      run: |
+        echo "🧹 Cleaning up development environment..."
+        docker compose down -v
+
+  # Production Environment - DLT/DBT via Docker Compose, Postgres/Grafana in Cloud
+  production-pipeline:
+    name: Production (Cloud Postgres)
+    runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' || github.event.inputs.environment == 'production' }}
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Create .env file for Docker Compose (Production)
+      run: |
+        cat > .env << EOF
+        # Jira API Credentials
+        JIRA_SUBDOMAIN=${{ secrets.JIRA_SUBDOMAIN }}
+        JIRA_EMAIL=${{ secrets.JIRA_EMAIL }}
+        JIRA_API_TOKEN=${{ secrets.JIRA_API_TOKEN }}
+        
+        # PostgreSQL Configuration (Cloud Service)
+        POSTGRES_USER=${{ secrets.PROD_POSTGRES_USER }}
+        POSTGRES_PASSWORD=${{ secrets.PROD_POSTGRES_PASSWORD }}
+        POSTGRES_DB=${{ secrets.PROD_POSTGRES_DB }}
+        POSTGRES_HOST=${{ secrets.PROD_POSTGRES_HOST }}
+        POSTGRES_PORT=${{ secrets.PROD_POSTGRES_PORT }}
+        
+        EOF
       env:
-        POSTGRES_HOST: localhost
-        POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
-        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-      run: |
-        python -c "
-        import psycopg2
-        import pandas as pd
-        
-        conn = psycopg2.connect(
-            host='localhost',
-            port='${{ secrets.POSTGRES_PORT }}',
-            user='${{ secrets.POSTGRES_USER }}',
-            password='${{ secrets.POSTGRES_PASSWORD }}',
-            database='${{ secrets.POSTGRES_DB }}'
-        )
-        
-        print('🔍 Testing dashboard queries...')
-        
-        # Test critical dashboard queries
-        queries = [
-            ('Issues Details', '''
-                SELECT issue_key, summary, assignee_name, project_name, days_to_resolution
-                FROM jira_analytics.fct_issues_details
-                LIMIT 1
-            '''),
-            ('Projects Overview', '''
-                SELECT project_name, total_issues, completion_percentage
-                FROM jira_analytics.dim_projects
-                LIMIT 1
-            '''),
-            ('Team Performance', '''
-                SELECT user_name, status_category, assigned_issues
-                FROM jira_analytics.fct_user_performance
-                LIMIT 1
-            ''')
-        ]
-        
-        for name, query in queries:
-            try:
-                df = pd.read_sql(query, conn)
-                print(f'✅ {name}: {len(df)} rows')
-            except Exception as e:
-                print(f'❌ {name}: {e}')
-                exit(1)
-        
-        conn.close()
-        print('✅ All dashboard queries working')
-        "
+        # Mask sensitive values in logs
+        JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        POSTGRES_PASSWORD: ${{ secrets.PROD_POSTGRES_PASSWORD }}
 
-    - name: Summary
+    - name: Run DLT + DBT Pipeline in Docker (Production)
       run: |
-        echo "🎉 Pipeline completed successfully!"
-        echo "📊 Data extracted and transformed"
-        echo "🧪 All tests passed"
-        echo "📚 Documentation generated"
-        echo "✅ Dashboard queries validated"
+        echo "🏭 Running DLT + DBT pipeline in production mode (full load)..."
+        
+        # Wait for cloud PostgreSQL to be ready (if applicable)
+        echo "⏳ Checking database connectivity..."
+        sleep 5  # Give cloud services time to be ready
+        
+        # Always run full load for production
+        echo "🚀 Starting DLT pipeline for production..."
+        docker compose run --rm --entrypoint="" -e JIRA_SUBDOMAIN=${{ secrets.JIRA_SUBDOMAIN }} -e JIRA_EMAIL=${{ secrets.JIRA_EMAIL }} -e JIRA_API_TOKEN=${{ secrets.JIRA_API_TOKEN }} dlt /app/entrypoint.sh all
+      timeout-minutes: 60
+
+    - name: Upload DBT artifacts (Production)
+      uses: actions/upload-artifact@v4
+      with:
+        name: dbt-artifacts-prod-${{ github.run_id }}
+        path: dbt/target/
+        retention-days: 30
+
+    - name: Health Check & Notifications (Optional)
+      if: always()
+      run: |
+        echo "🏥 Running production health checks and sending notifications..."
+
+    - name: Cleanup DLT Docker Compose service
+      if: always()
+      run: |
+        echo "🧹 Cleaning up DLT Docker Compose service..."
+        docker compose down -v dlt

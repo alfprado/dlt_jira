@@ -28,4 +28,8 @@ SELECT
     _dlt_id
 
 FROM 
-    {{ source('jira_data', 'projects') }}
+    {% if var('load_projects', true) %}
+        {{ source('jira_data', 'projects') }}
+    {% else %}
+        (SELECT NULL::text AS id, NULL::text AS key, NULL::text AS name, NULL::text AS description, NULL::text AS lead__account_id, NULL::text AS lead__display_name, NULL::text AS project_type_key, NULL::bigint AS insight__total_issue_count, NULL::timestamp AS insight__last_issue_update_time, NULL::text AS _dlt_id WHERE 1=0) AS projects
+    {% endif %}

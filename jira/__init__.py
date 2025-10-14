@@ -65,7 +65,12 @@ def jira_search(
 
     @dlt.resource(
         write_disposition="merge",
-        primary_key="id"
+        primary_key="id",
+        columns={
+            'fields__timespent': {'data_type': 'text'},
+            'tmp_from_account_id': {'data_type': 'text'},
+            'changelog__histories__items__tmp_from_account_id': {'data_type': 'text'}
+        }
     )
     def issues(jql_queries: List[str]) -> Iterable[TDataItem]:
         api_path = "rest/api/3/search/jql"

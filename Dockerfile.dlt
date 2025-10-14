@@ -2,40 +2,32 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Copiar arquivos de requisitos e instalar dependências
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar código fonte
+# Copy application code
 COPY jira/ /app/jira/
 COPY jira_pipeline.py /app/
 COPY .dlt/ /app/.dlt/
+COPY dbt/ /app/dbt/
 
-# Configurar variáveis de ambiente
+# Set environment variables for memory optimization
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
+ENV DLT_MEMORY_LIMIT=512MB
+ENV DLT_WORKERS=2
+ENV DLT_BATCH_SIZE=1000
 
-# Criar script para atualizar secrets.toml com variáveis de ambiente
-RUN echo '#!/bin/sh\n\
-# Atualizar secrets.toml com as variáveis de ambiente\n\
-cat > /app/.dlt/secrets.toml << EOF\n\
-[sources.jira]\n\
-subdomain = "${JIRA_SUBDOMAIN}"\n\
-email = "${JIRA_EMAIL}"\n\
-api_token = "${JIRA_API_TOKEN}"\n\
-\n\
-# PostgreSQL Configuration\n\
-[destination.postgres.credentials]\n\
-database = "${POSTGRES_DB}"\n\
-password = "${POSTGRES_PASSWORD}"\n\
-username = "${POSTGRES_USER}"\n\
-host = "postgres"\n\
-port = ${POSTGRES_PORT}\n\
-connect_timeout = 15\n\
-EOF\n\
-\n\
-python jira_pipeline.py all\n\
-' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+# Copy entrypoint script
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
-# Comando padrão
+# Default command
 CMD ["/app/entrypoint.sh"]

@@ -8,10 +8,6 @@ DEFAULT_ENDPOINTS = {
             "expand": "fields,changelog,operations,transitions,names",
             "validateQuery": "strict",
             "jql": "updated >= -90d",
-        },
-        "params": {
-            "write_disposition": "merge",
-            "primary_key": "id",
         }
     },
     "users": {
