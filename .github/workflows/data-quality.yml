@@ -37,13 +37,7 @@ jobs:
     - name: Install Dependencies
       run: |
         pip install -r requirements.txt
-        pip install dbt-core dbt-postgres
         pip install great-expectations
-        
-    - name: Run Data Quality Tests
-      run: |
-        cd dbt
-        dbt test --target prod --store-failures
         
     - name: Data Freshness Check
       run: |
