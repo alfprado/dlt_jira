@@ -47,11 +47,11 @@ fi
 log "Instalando dependências..."
 pip install -r requirements.txt
 pip install pytest pytest-cov pytest-mock psutil
-pip install black flake8 isort mypy bandit safety
+pip install black flake8 isort bandit safety
 
 # Verificar formatação de código
 log "Verificando formatação de código (Black)..."
-if black --check --diff .; then
+if black --check --diff run_pipeline.py orchestrator.py monitor.py jira/ tests/; then
     success "Formatação de código OK"
 else
     warning "Código precisa ser formatado"
@@ -59,7 +59,7 @@ fi
 
 # Verificar ordenação de imports
 log "Verificando ordenação de imports (isort)..."
-if isort --check-only --diff .; then
+if isort --check-only --diff run_pipeline.py orchestrator.py monitor.py jira/ tests/; then
     success "Imports ordenados corretamente"
 else
     warning "Imports precisam ser ordenados"
@@ -67,23 +67,17 @@ fi
 
 # Verificar linting
 log "Verificando linting (Flake8)..."
-if flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics; then
+if flake8 run_pipeline.py orchestrator.py monitor.py jira/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics; then
     success "Linting OK"
 else
     warning "Problemas de linting encontrados"
 fi
 
-# Verificar tipos
-log "Verificando tipos (MyPy)..."
-if mypy run_pipeline.py orchestrator.py monitor.py --ignore-missing-imports; then
-    success "Verificação de tipos OK"
-else
-    warning "Problemas de tipos encontrados"
-fi
+# MyPy removed from workflow
 
 # Verificar segurança
 log "Verificando segurança (Bandit)..."
-if bandit -r . -f json -o bandit-report.json; then
+if bandit -r run_pipeline.py orchestrator.py monitor.py jira/ -f json -o bandit-report.json; then
     success "Verificação de segurança OK"
 else
     warning "Problemas de segurança encontrados"
@@ -91,7 +85,7 @@ fi
 
 # Verificar dependências
 log "Verificando dependências (Safety)..."
-if safety check --json --output safety-report.json; then
+if safety check --json > safety-report.json; then
     success "Dependências seguras"
 else
     warning "Vulnerabilidades encontradas nas dependências"

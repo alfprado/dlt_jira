@@ -7,13 +7,13 @@ DEFAULT_ENDPOINTS = {
             "expand": "fields,changelog",
             "validateQuery": "strict",
             "jql": "updated >= -90d",
-        }
+        },
     },
     "users": {
         "api_path": "rest/api/3/users",
         "params": {
             "includeInactiveUsers": True,
-            "fields": "accountId,displayName,emailAddress,active,timeZone"
+            "fields": "accountId,displayName,emailAddress,active,timeZone",
         },
     },
     "projects": {
@@ -22,7 +22,7 @@ DEFAULT_ENDPOINTS = {
         "params": {
             "status": "live,archived,deleted",
             "fields": "id,key,name,description,lead,projectTypeKey",
-            "expand": "description,lead"
+            "expand": "description,lead",
         },
     },
 }

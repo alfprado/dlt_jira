@@ -1,4 +1,4 @@
-""" This source uses Jira API and dlt to load data such as Issues, Users, Workflows and Projects to the database. """
+"""This source uses Jira API and dlt to load data such as Issues, Users, Workflows and Projects to the database."""
 
 from typing import Iterable, List, Optional
 
@@ -10,9 +10,7 @@ from dlt.sources.helpers import requests
 from .settings import DEFAULT_ENDPOINTS, DEFAULT_PAGE_SIZE
 
 
-@dlt.source(
-    max_table_nesting=3
-)
+@dlt.source(max_table_nesting=3)
 def jira(
     subdomain: str = dlt.secrets.value,
     email: str = dlt.secrets.value,
@@ -38,12 +36,12 @@ def jira(
             primary_key = "id"
         else:
             primary_key = None
-        
+
         res_function = dlt.resource(
-            get_paginated_data, 
-            name=endpoint_name, 
+            get_paginated_data,
+            name=endpoint_name,
             write_disposition="merge",
-            primary_key=primary_key
+            primary_key=primary_key,
         )(
             **endpoint_parameters,  # type: ignore[arg-type]
             subdomain=subdomain,
@@ -56,9 +54,7 @@ def jira(
     return resources
 
 
-@dlt.source(
-    max_table_nesting=3
-)
+@dlt.source(max_table_nesting=3)
 def jira_search(
     subdomain: str = dlt.secrets.value,
     email: str = dlt.secrets.value,
@@ -77,10 +73,7 @@ def jira_search(
         Iterable[DltResource]: Resource function for searching issues.
     """
 
-    @dlt.resource(
-        write_disposition="merge",
-        primary_key="id"
-    )
+    @dlt.resource(write_disposition="merge", primary_key="id")
     def issues(jql_queries: List[str]) -> Iterable[TDataItem]:
         api_path = "rest/api/3/search/jql"
 
@@ -129,22 +122,20 @@ def get_paginated_data(
         Iterable[TDataItem]: Yields pages of data from the API.
     """
     import time
-    from .settings import MAX_RETRIES, RETRY_DELAY, RATE_LIMIT_DELAY
-    
+
+    from .settings import MAX_RETRIES, RATE_LIMIT_DELAY, RETRY_DELAY
+
     if api_path == "jql":
         url = f"https://{subdomain}.atlassian.net/rest/api/3/search"
     elif api_path.startswith("/"):
         url = f"https://{subdomain}.atlassian.net{api_path}"
     else:
         url = f"https://{subdomain}.atlassian.net/{api_path}"
-    
-    headers = {
-        "Accept": "application/json",
-        "User-Agent": "dlt-jira-pipeline/1.0"
-    }
+
+    headers = {"Accept": "application/json", "User-Agent": "dlt-jira-pipeline/1.0"}
     auth = (email, api_token)
     params = {} if params is None else params.copy()
-    
+
     if api_path == "jql":
         params["startAt"] = start_at = 0
         params["maxResults"] = page_size
@@ -159,11 +150,7 @@ def get_paginated_data(
         for attempt in range(MAX_RETRIES):
             try:
                 response = requests.get(
-                    url, 
-                    auth=auth, 
-                    headers=headers, 
-                    params=params,
-                    timeout=30
+                    url, auth=auth, headers=headers, params=params, timeout=30
                 )
                 response.raise_for_status()
                 result = response.json()
@@ -171,7 +158,7 @@ def get_paginated_data(
             except requests.exceptions.RequestException as e:
                 if attempt == MAX_RETRIES - 1:
                     raise e
-                time.sleep(RETRY_DELAY * (2 ** attempt))
+                time.sleep(RETRY_DELAY * (2**attempt))
                 continue
 
         if data_path and data_path in result:
@@ -196,11 +183,11 @@ def get_paginated_data(
                 continue
             if not result.get("hasMore", True):
                 break
-        
+
         start_at += len(results_page)
         params["startAt"] = start_at
-        
+
         if len(results_page) < page_size:
             break
-        
+
         time.sleep(RATE_LIMIT_DELAY)
