@@ -1,0 +1,58 @@
+name: Data Quality Pipeline
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 6 AM
+  workflow_dispatch:
+
+jobs:
+  data-quality:
+    name: Data Quality Checks
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+        
+    - name: Install Dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install dbt-core dbt-postgres
+        pip install great-expectations
+        
+    - name: Run Data Quality Tests
+      run: |
+        cd dbt
+        dbt test --target prod --store-failures
+        
+    - name: Data Freshness Check
+      run: |
+        python monitor.py --check-freshness
+        
+    - name: Data Volume Check
+      run: |
+        python monitor.py --check-volume
+        
+    - name: Data Quality Report
+      run: |
+        python monitor.py --generate-report
