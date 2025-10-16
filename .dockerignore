@@ -1,0 +1,84 @@
+# Arquivos e diretórios a serem ignorados no build Docker
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Dados temporários
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Documentação
+*.md
+docs/
+
+# Testes
+tests/
+test_*.py
+*_test.py
+
+# Build artifacts
+target/
+dist/
+build/
+
+# Node modules (se houver)
+node_modules/
+npm-debug.log*
+
+# Arquivos de configuração local
+.env.local
+.env.development
+.env.test
+
+# Arquivos de backup
+*.bak
+*.backup
+
+# Arquivos de lock
+package-lock.json
+yarn.lock
+Pipfile.lock
+
+# Arquivos de cache
+.cache/
+.npm/
+.yarn/
