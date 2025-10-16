@@ -16,6 +16,7 @@ def main():
     }
     
     pipeline = JiraDataPipeline(config)
+    success = False  # Initialize success variable
     
     if len(sys.argv) > 1:
         command = sys.argv[1].lower()
