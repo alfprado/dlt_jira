@@ -39,7 +39,7 @@ project_snapshot AS (
             ELSE (COALESCE(pi.completed_issues, 0)::numeric / COALESCE(pi.total_issues, 1)::numeric * 100)
         END AS completion_percentage,
         pi.first_issue_date,
-        COALESCE(pi.last_issue_update, p.last_issue_update_time) AS last_issue_update,
+        COALESCE(pi.last_issue_update, p.last_issue_update_time::timestamp) AS last_issue_update,
         CASE
             WHEN COALESCE(pi.total_issues, 0) = 0 THEN 'New'
             WHEN (COALESCE(pi.completed_issues, 0)::numeric / NULLIF(COALESCE(pi.total_issues, 1), 0)::numeric) >= 0.9 THEN 'Completed'

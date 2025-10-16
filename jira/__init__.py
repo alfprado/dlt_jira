@@ -10,7 +10,9 @@ from dlt.sources.helpers import requests
 from .settings import DEFAULT_ENDPOINTS, DEFAULT_PAGE_SIZE
 
 
-@dlt.source(max_table_nesting=2)
+@dlt.source(
+    max_table_nesting=3
+)
 def jira(
     subdomain: str = dlt.secrets.value,
     email: str = dlt.secrets.value,
@@ -30,8 +32,19 @@ def jira(
     """
     resources = []
     for endpoint_name, endpoint_parameters in DEFAULT_ENDPOINTS.items():
+        # Configurar primary key baseado no endpoint
+        if endpoint_name == "users":
+            primary_key = "accountId"  # Usuários usam accountId
+        elif endpoint_name in ["issues", "projects"]:
+            primary_key = "id"  # Issues e projetos usam id
+        else:
+            primary_key = None
+        
         res_function = dlt.resource(
-            get_paginated_data, name=endpoint_name, write_disposition="replace"
+            get_paginated_data, 
+            name=endpoint_name, 
+            write_disposition="merge",
+            primary_key=primary_key
         )(
             **endpoint_parameters,  # type: ignore[arg-type]
             subdomain=subdomain,
@@ -44,7 +57,9 @@ def jira(
     return resources
 
 
-@dlt.source(max_table_nesting=2)
+@dlt.source(
+    max_table_nesting=3
+)
 def jira_search(
     subdomain: str = dlt.secrets.value,
     email: str = dlt.secrets.value,
@@ -101,7 +116,7 @@ def get_paginated_data(
     params: Optional[DictStrAny] = None,
 ) -> Iterable[TDataItem]:
     """
-    Function to fetch paginated data from a Jira API endpoint.
+    Function to fetch paginated data from a Jira API endpoint with improved error handling and rate limiting.
 
     Args:
         subdomain: The subdomain for the Jira instance.
@@ -115,33 +130,95 @@ def get_paginated_data(
         Iterable[TDataItem]: Yields pages of data from the API.
     """
     import time
+    from .settings import MAX_RETRIES, RETRY_DELAY, RATE_LIMIT_DELAY
     
-    url = f"https://{subdomain}.atlassian.net/{api_path}"
-    headers = {"Accept": "application/json"}
+    # Construir URL baseada no tipo de endpoint
+    if api_path == "jql":
+        # Para JQL, usar o endpoint de search
+        url = f"https://{subdomain}.atlassian.net/rest/api/3/search"
+    elif api_path.startswith("/"):
+        # Para paths que começam com /, usar diretamente
+        url = f"https://{subdomain}.atlassian.net{api_path}"
+    else:
+        # Para outros paths, adicionar rest/api/3/ se necessário
+        url = f"https://{subdomain}.atlassian.net/{api_path}"
+    
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "dlt-jira-pipeline/1.0"
+    }
     auth = (email, api_token)
-    params = {} if params is None else params
-    params["startAt"] = start_at = 0
-    params["maxResults"] = page_size
+    params = {} if params is None else params.copy()
+    
+    # Configurar paginação baseada no tipo de endpoint
+    if api_path == "jql":
+        # Para JQL, usar startAt/maxResults
+        params["startAt"] = start_at = 0
+        params["maxResults"] = page_size
+    else:
+        # Para outros endpoints, usar startAt/maxResults se suportado
+        if "startAt" not in params:
+            params["startAt"] = start_at = 0
+        if "maxResults" not in params:
+            params["maxResults"] = page_size
+        start_at = params.get("startAt", 0)
 
     while True:
-        response = requests.get(url, auth=auth, headers=headers, params=params)
-        response.raise_for_status()
-        result = response.json()
+        # Retry logic with exponential backoff
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = requests.get(
+                    url, 
+                    auth=auth, 
+                    headers=headers, 
+                    params=params,
+                    timeout=30
+                )
+                response.raise_for_status()
+                result = response.json()
+                break
+            except requests.exceptions.RequestException as e:
+                if attempt == MAX_RETRIES - 1:
+                    raise e
+                time.sleep(RETRY_DELAY * (2 ** attempt))  # Exponential backoff
+                continue
 
-        if data_path:
-            results_page = result.pop(data_path)
+        # Extrair dados baseado no data_path
+        if data_path and data_path in result:
+            results_page = result[data_path]
+        elif isinstance(result, list):
+            results_page = result
+        elif isinstance(result, dict) and "values" in result:
+            results_page = result["values"]
         else:
             results_page = result
 
+        # Validate data quality
+        if not results_page or len(results_page) == 0:
+            break
+
         yield results_page
 
-        if isinstance(result, dict) and result.get("isLast", False):
-            break
-        elif isinstance(result, list) and len(results_page) < page_size:
-            break
-
+        # Check if we should continue pagination
+        if isinstance(result, dict):
+            # Para endpoints com paginação padrão do Jira
+            if result.get("isLast", False):
+                break
+            # Para endpoints com nextPage
+            if "nextPage" in result:
+                params["startAt"] = result["nextPage"]
+                continue
+            # Para endpoints com hasMore
+            if not result.get("hasMore", True):
+                break
+        
+        # Incrementar paginação
         start_at += len(results_page)
         params["startAt"] = start_at
         
-        # Rate limiting - wait 0.5 seconds between requests
-        time.sleep(0.5)
+        # Verificar se ainda há dados para paginar
+        if len(results_page) < page_size:
+            break
+        
+        # Optimized rate limiting
+        time.sleep(RATE_LIMIT_DELAY)

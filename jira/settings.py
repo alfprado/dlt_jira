@@ -1,3 +1,6 @@
+# Configurações otimizadas para ingestão Jira
+# Seguindo boas práticas de mercado
+
 # Define endpoints
 DEFAULT_ENDPOINTS = {
     "issues": {
@@ -8,10 +11,6 @@ DEFAULT_ENDPOINTS = {
             "expand": "fields,changelog,operations,transitions,names",
             "validateQuery": "strict",
             "jql": "updated >= -90d",
-        },
-        "params": {
-            "write_disposition": "merge",
-            "primary_key": "id",
         }
     },
     "users": {
@@ -32,4 +31,13 @@ DEFAULT_ENDPOINTS = {
         },
     },
 }
+
 DEFAULT_PAGE_SIZE = 50
+MAX_RETRIES = 3
+RETRY_DELAY = 1.0  # segundos
+RATE_LIMIT_DELAY = 0.1  # 100ms entre requests
+BATCH_SIZE = 50  # Para processamento em lotes
+
+# Configurações de qualidade de dados
+MIN_ISSUE_AGE_HOURS = 1  # Issues mais recentes que 1 hora
+MAX_ISSUES_PER_RUN = 10000  # Limite de segurança

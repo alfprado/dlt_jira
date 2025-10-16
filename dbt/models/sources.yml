@@ -2,7 +2,7 @@ version: 2
 
 sources:
   - name: jira_data
-    description: "Raw data from Jira API loaded via dlt"
+    description: "Raw data from Jira API loaded via dlt (complete pipeline)"
     database: jira_dw
     schema: jira_data
     tables:

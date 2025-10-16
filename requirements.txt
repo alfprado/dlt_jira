@@ -1,3 +1,19 @@
+# Core dependencies
 dlt[postgres]>=1.17.1
-dbt-postgres>=1.7.0
+dbt-core==1.10.13
+dbt-postgres==1.9.1
+
+# Data processing
 pandas>=2.3.3
+numpy>=1.24.0
+
+# Database
+psycopg2-binary>=2.9.0
+
+# Monitoring
+psutil>=5.9.0
+
+# Development (opcional)
+pytest>=7.0.0
+black>=23.0.0
+flake8>=6.0.0

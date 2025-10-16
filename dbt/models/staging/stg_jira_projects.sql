@@ -20,12 +20,16 @@ SELECT
     -- Project metadata
     project_type_key,
     
-    -- Insight data
-    insight__total_issue_count AS api_issue_count,
-    insight__last_issue_update_time AS last_issue_update_time,
+    -- Insight data (if available)
+    NULL AS api_issue_count,
+    NULL AS last_issue_update_time,
     
     -- Additional metadata
     _dlt_id
 
 FROM 
-    {{ source('jira_data', 'projects') }}
+    {% if var('load_projects', true) %}
+        {{ source('jira_data', 'projects') }}
+    {% else %}
+        (SELECT NULL::text AS id, NULL::text AS key, NULL::text AS name, NULL::text AS description, NULL::text AS lead__account_id, NULL::text AS lead__display_name, NULL::text AS project_type_key, NULL::text AS _dlt_id WHERE 1=0) AS projects
+    {% endif %}
