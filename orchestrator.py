@@ -7,7 +7,6 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from pathlib import Path
 
-# Configurar logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -18,7 +17,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class JiraDataPipeline:
-    """Pipeline completo de ingestão e transformação de dados do Jira"""
+    """Complete Jira data ingestion and transformation pipeline"""
     
     def __init__(self, config: Dict[str, Any]):
         self.config = config
@@ -27,18 +26,18 @@ class JiraDataPipeline:
         self.logs_dir.mkdir(exist_ok=True)
         
     def get_dlt_pipeline(self, pipeline_name: str) -> dlt.Pipeline:
-        """Cria pipeline dlt configurado"""
+        """Creates configured dlt pipeline"""
         return dlt.pipeline(
             pipeline_name=pipeline_name,
             destination="postgres",
             dataset_name="jira_data",
             progress="log",
-            dev_mode=False  # Desabilitar dev_mode para usar schema fixo
+            dev_mode=False
         )
     
     def extract_data(self, data_type: str = "all") -> bool:
-        """Executa extração de dados usando dlt"""
-        logger.info(f"🚀 Iniciando extração de dados: {data_type}")
+        """Executes data extraction using dlt"""
+        logger.info(f"Starting data extraction: {data_type}")
         
         try:
             pipeline = self.get_dlt_pipeline(f"jira_{data_type}")
@@ -52,198 +51,185 @@ class JiraDataPipeline:
             elif data_type == "users":
                 return self._extract_users_only(pipeline)
             else:
-                logger.error(f"Tipo de dados não suportado: {data_type}")
+                logger.error(f"Unsupported data type: {data_type}")
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Erro na extração de dados: {e}")
+            logger.error(f"Error in data extraction: {e}")
             return False
     
     def _extract_all_data(self, pipeline: dlt.Pipeline) -> bool:
-        """Extrai todos os dados do Jira"""
+        """Extracts all Jira data"""
         from jira import jira, jira_search
         
         try:
-            # Projetos
-            logger.info("📁 Extraindo projetos...")
+            logger.info("Extracting projects...")
             projects_resource = jira().projects
             pipeline.run([projects_resource])
-            logger.info("✅ Projetos extraídos com sucesso")
+            logger.info("Projects extracted successfully")
             
-            # Usuários
-            logger.info("👥 Extraindo usuários...")
+            logger.info("Extracting users...")
             users_resource = jira().users
             pipeline.run([users_resource])
-            logger.info("✅ Usuários extraídos com sucesso")
+            logger.info("Users extracted successfully")
             
-            # Issues
-            logger.info("🎫 Extraindo issues...")
+            logger.info("Extracting issues...")
             issues_resource = jira_search().issues(jql_queries=['updated >= "-5d"'])
             pipeline.run([issues_resource])
-            logger.info("✅ Issues extraídas com sucesso")
+            logger.info("Issues extracted successfully")
             
             return True
             
         except Exception as e:
-            logger.error(f"❌ Erro na extração completa: {e}")
+            logger.error(f"Error in complete extraction: {e}")
             return False
     
     def _extract_issues_only(self, pipeline: dlt.Pipeline) -> bool:
-        """Extrai apenas issues"""
+        """Extracts only issues"""
         from jira import jira_search
         
         try:
             issues_resource = jira_search().issues(jql_queries=['updated >= "-30d"'])
             pipeline.run([issues_resource])
-            logger.info("✅ Issues extraídas com sucesso")
+            logger.info("Issues extracted successfully")
             return True
         except Exception as e:
-            logger.error(f"❌ Erro na extração de issues: {e}")
+            logger.error(f"Error in issues extraction: {e}")
             return False
     
     def _extract_projects_only(self, pipeline: dlt.Pipeline) -> bool:
-        """Extrai apenas projetos"""
+        """Extracts only projects"""
         from jira import jira
         
         try:
             projects_resource = jira().projects
             pipeline.run([projects_resource])
-            logger.info("✅ Projetos extraídos com sucesso")
+            logger.info("Projects extracted successfully")
             return True
         except Exception as e:
-            logger.error(f"❌ Erro na extração de projetos: {e}")
+            logger.error(f"Error in projects extraction: {e}")
             return False
     
     def _extract_users_only(self, pipeline: dlt.Pipeline) -> bool:
-        """Extrai apenas usuários"""
+        """Extracts only users"""
         from jira import jira
         
         try:
             users_resource = jira().users
             pipeline.run([users_resource])
-            logger.info("✅ Usuários extraídos com sucesso")
+            logger.info("Users extracted successfully")
             return True
         except Exception as e:
-            logger.error(f"❌ Erro na extração de usuários: {e}")
+            logger.error(f"Error in users extraction: {e}")
             return False
     
     def transform_data(self, dbt_command: str = "run") -> bool:
-        """Executa transformações usando dbt"""
-        logger.info(f"🔄 Iniciando transformação de dados: dbt {dbt_command}")
+        """Executes transformations using dbt"""
+        logger.info(f"Starting data transformation: dbt {dbt_command}")
         
         try:
-            # Verificar se estamos no diretório correto
             if os.path.exists("/app/dbt"):
-                dbt_dir = Path("/app/dbt")  # Docker
+                dbt_dir = Path("/app/dbt")
             else:
-                dbt_dir = Path("/home/alfprado/dev/Flexiana/dlt_jira/dbt")  # Local
+                dbt_dir = Path("/home/alfprado/dev/Flexiana/dlt_jira/dbt")
                 
             if not dbt_dir.exists():
-                logger.error(f"❌ Diretório dbt não encontrado: {dbt_dir.absolute()}")
+                logger.error(f"dbt directory not found: {dbt_dir.absolute()}")
                 return False
 
-            # Configurar variáveis de ambiente para dbt
             env = os.environ.copy()
-            env["DBT_LOG_PATH"] = "/tmp/dbt_logs"  # Usar diretório temporário com permissões
+            env["DBT_LOG_PATH"] = "/tmp/dbt_logs"
             
-            # Executar dbt diretamente usando os.system
-            
-            # Mudar para o diretório dbt
             original_cwd = os.getcwd()
             os.chdir(dbt_dir)
             
             try:
-                # Executar dbt
                 cmd = f"dbt {dbt_command} --log-level info"
-                logger.info(f"Executando: {cmd} em {dbt_dir}")
+                logger.info(f"Executing: {cmd} in {dbt_dir}")
                 
                 result_code = os.system(cmd)
                 
                 if result_code == 0:
-                    logger.info(f"✅ dbt {dbt_command} executado com sucesso")
+                    logger.info(f"dbt {dbt_command} executed successfully")
                     return True
                 else:
-                    logger.error(f"❌ dbt {dbt_command} falhou com código {result_code}")
+                    logger.error(f"dbt {dbt_command} failed with code {result_code}")
                     return False
                     
             finally:
-                # Voltar ao diretório original
                 os.chdir(original_cwd)
                 
         except subprocess.TimeoutExpired:
-            logger.error("❌ dbt timeout - processo demorou mais de 30 minutos")
+            logger.error("dbt timeout - process took more than 30 minutes")
             return False
         except Exception as e:
-            logger.error(f"❌ Erro na execução do dbt: {e}")
+            logger.error(f"Error executing dbt: {e}")
             return False
     
     def run_full_pipeline(self, data_type: str = "all", dbt_command: str = "run") -> bool:
-        """Executa pipeline completo: extração + transformação"""
-        logger.info("🚀 Iniciando pipeline completo de dados do Jira")
+        """Executes complete pipeline: extraction + transformation"""
+        logger.info("Starting complete Jira data pipeline")
         logger.info("=" * 60)
         
         start_time = datetime.now()
         
-        # Etapa 1: Extração
-        logger.info("📥 ETAPA 1: EXTRAÇÃO DE DADOS")
+        logger.info("STEP 1: DATA EXTRACTION")
         logger.info("-" * 40)
         if not self.extract_data(data_type):
-            logger.error("❌ Falha na extração de dados. Abortando pipeline.")
+            logger.error("Data extraction failed. Aborting pipeline.")
             return False
         
-        # Etapa 2: Transformação
-        logger.info("\n🔄 ETAPA 2: TRANSFORMAÇÃO DE DADOS")
+        logger.info("\nSTEP 2: DATA TRANSFORMATION")
         logger.info("-" * 40)
         if not self.transform_data(dbt_command):
-            logger.error("❌ Falha na transformação de dados.")
+            logger.error("Data transformation failed.")
             return False
         
-        # Resumo final
         end_time = datetime.now()
         duration = end_time - start_time
         
         logger.info("\n" + "=" * 60)
-        logger.info("🎉 PIPELINE CONCLUÍDO COM SUCESSO!")
-        logger.info(f"⏱️  Duração total: {duration}")
-        logger.info(f"📊 Dados extraídos: {data_type}")
-        logger.info(f"🔄 Transformação: dbt {dbt_command}")
+        logger.info("PIPELINE COMPLETED SUCCESSFULLY!")
+        logger.info(f"Total duration: {duration}")
+        logger.info(f"Extracted data: {data_type}")
+        logger.info(f"Transformation: dbt {dbt_command}")
         logger.info("=" * 60)
         
         return True
     
     def run_dbt_only(self, dbt_command: str = "run") -> bool:
-        """Executa apenas as transformações dbt (sem extração)"""
-        logger.info(f"🔄 Executando apenas dbt {dbt_command}")
+        """Executes only dbt transformations (without extraction)"""
+        logger.info(f"Executing only dbt {dbt_command}")
         return self.transform_data(dbt_command)
     
     def run_extraction_only(self, data_type: str = "all") -> bool:
-        """Executa apenas a extração de dados (sem transformação)"""
-        logger.info(f"📥 Executando apenas extração: {data_type}")
+        """Executes only data extraction (without transformation)"""
+        logger.info(f"Executing only extraction: {data_type}")
         return self.extract_data(data_type)
 
 
 def main():
-    """Função principal para execução via linha de comando"""
+    """Main function for command line execution"""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Pipeline de dados do Jira com dbt")
+    parser = argparse.ArgumentParser(description="Jira data pipeline with dbt")
     parser.add_argument("--mode", choices=["full", "extract", "transform"], 
-                       default="full", help="Modo de execução")
+                       default="full", help="Execution mode")
     parser.add_argument("--data-type", choices=["all", "issues", "projects", "users"], 
-                       default="all", help="Tipo de dados para extrair")
+                       default="all", help="Data type to extract")
     parser.add_argument("--dbt-command", default="run", 
-                       help="Comando dbt para executar (run, test, docs, etc.)")
+                       help="dbt command to execute (run, test, docs, etc.)")
     
     args = parser.parse_args()
     
-    # Configuração do pipeline
+    # Pipeline configuration
     config = {
         "pipeline_name": "jira_analytics",
         "destination": "postgres",
         "dataset_name": "jira_data"
     }
     
-    # Criar e executar pipeline
+    # Create and execute pipeline
     pipeline = JiraDataPipeline(config)
     
     try:
@@ -255,17 +241,17 @@ def main():
             success = pipeline.run_dbt_only(args.dbt_command)
         
         if success:
-            logger.info("✅ Pipeline executado com sucesso!")
+            logger.info("Pipeline executed successfully!")
             sys.exit(0)
         else:
-            logger.error("❌ Pipeline falhou!")
+            logger.error("Pipeline failed!")
             sys.exit(1)
             
     except KeyboardInterrupt:
-        logger.info("⏹️  Pipeline interrompido pelo usuário")
+        logger.info("Pipeline interrupted by user")
         sys.exit(1)
     except Exception as e:
-        logger.error(f"❌ Erro inesperado: {e}")
+        logger.error(f"Unexpected error: {e}")
         sys.exit(1)
 
 

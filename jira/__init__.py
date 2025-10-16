@@ -32,11 +32,10 @@ def jira(
     """
     resources = []
     for endpoint_name, endpoint_parameters in DEFAULT_ENDPOINTS.items():
-        # Configurar primary key baseado no endpoint
         if endpoint_name == "users":
-            primary_key = "accountId"  # Usuários usam accountId
+            primary_key = "accountId"
         elif endpoint_name in ["issues", "projects"]:
-            primary_key = "id"  # Issues e projetos usam id
+            primary_key = "id"
         else:
             primary_key = None
         
@@ -132,15 +131,11 @@ def get_paginated_data(
     import time
     from .settings import MAX_RETRIES, RETRY_DELAY, RATE_LIMIT_DELAY
     
-    # Construir URL baseada no tipo de endpoint
     if api_path == "jql":
-        # Para JQL, usar o endpoint de search
         url = f"https://{subdomain}.atlassian.net/rest/api/3/search"
     elif api_path.startswith("/"):
-        # Para paths que começam com /, usar diretamente
         url = f"https://{subdomain}.atlassian.net{api_path}"
     else:
-        # Para outros paths, adicionar rest/api/3/ se necessário
         url = f"https://{subdomain}.atlassian.net/{api_path}"
     
     headers = {
@@ -150,13 +145,10 @@ def get_paginated_data(
     auth = (email, api_token)
     params = {} if params is None else params.copy()
     
-    # Configurar paginação baseada no tipo de endpoint
     if api_path == "jql":
-        # Para JQL, usar startAt/maxResults
         params["startAt"] = start_at = 0
         params["maxResults"] = page_size
     else:
-        # Para outros endpoints, usar startAt/maxResults se suportado
         if "startAt" not in params:
             params["startAt"] = start_at = 0
         if "maxResults" not in params:
@@ -164,7 +156,6 @@ def get_paginated_data(
         start_at = params.get("startAt", 0)
 
     while True:
-        # Retry logic with exponential backoff
         for attempt in range(MAX_RETRIES):
             try:
                 response = requests.get(
@@ -180,10 +171,9 @@ def get_paginated_data(
             except requests.exceptions.RequestException as e:
                 if attempt == MAX_RETRIES - 1:
                     raise e
-                time.sleep(RETRY_DELAY * (2 ** attempt))  # Exponential backoff
+                time.sleep(RETRY_DELAY * (2 ** attempt))
                 continue
 
-        # Extrair dados baseado no data_path
         if data_path and data_path in result:
             results_page = result[data_path]
         elif isinstance(result, list):
@@ -193,32 +183,24 @@ def get_paginated_data(
         else:
             results_page = result
 
-        # Validate data quality
         if not results_page or len(results_page) == 0:
             break
 
         yield results_page
 
-        # Check if we should continue pagination
         if isinstance(result, dict):
-            # Para endpoints com paginação padrão do Jira
             if result.get("isLast", False):
                 break
-            # Para endpoints com nextPage
             if "nextPage" in result:
                 params["startAt"] = result["nextPage"]
                 continue
-            # Para endpoints com hasMore
             if not result.get("hasMore", True):
                 break
         
-        # Incrementar paginação
         start_at += len(results_page)
         params["startAt"] = start_at
         
-        # Verificar se ainda há dados para paginar
         if len(results_page) < page_size:
             break
         
-        # Optimized rate limiting
         time.sleep(RATE_LIMIT_DELAY)
